@@ -186,7 +186,7 @@ dbsavr --version
 **List configured databases:**
 
 ```bash
-dbsavr --config config.yaml list_databases
+dbsavr --config config.yaml list-databases
 ```
 
 Example output:
@@ -207,7 +207,7 @@ analytics_db:
 **List backup schedules:**
 
 ```bash
-dbsavr --config config.yaml list_schedules
+dbsavr --config config.yaml list-schedules
 ```
 
 Example output:
@@ -251,7 +251,7 @@ Deleted old backups: 0
 **Generate Celery scheduler configuration:**
 
 ```bash
-dbsavr --config config.yaml setup_celery_schedule
+dbsavr --config config.yaml setup-celery-schedule
 ```
 
 This will create a `celeryconfig.py` file with all the necessary settings derived from your backup schedules.
@@ -259,7 +259,7 @@ This will create a `celeryconfig.py` file with all the necessary settings derive
 **Start the scheduler:**
 
 ```bash
-dbsavr --config config.yaml run_scheduler
+dbsavr --config config.yaml run-scheduler
 ```
 
 Example output:
@@ -272,13 +272,13 @@ Scheduler is running. Press Ctrl+C to stop.
 **One-step setup and run:**
 
 ```bash
-dbsavr --config config.yaml setup_celery_schedule --run-after
+dbsavr --config config.yaml setup-celery-schedule --run-after
 ```
 
 **Stop the scheduler:**
 
 ```bash
-dbsavr stop_scheduler --pid-file dbsavr-worker.pid
+dbsavr stop-scheduler --pid-file dbsavr-worker.pid
 ```
 
 ### Maintenance Commands
@@ -311,7 +311,7 @@ Deleted backups:
 The simplest way to set up and run scheduled backups:
 
 ```bash
-dbsavr --config config.yaml setup_celery_schedule --run-after
+dbsavr --config config.yaml setup-celery-schedule --run-after
 ```
 
 This will generate the necessary Celery configuration and immediately start the scheduler.
@@ -323,13 +323,13 @@ For more control, you can set up and run separately:
 1. Generate Celery configuration:
 
 ```bash
-dbsavr --config config.yaml setup_celery_schedule
+dbsavr --config config.yaml setup-celery-schedule
 ```
 
 2. Start the scheduler:
 
 ```bash
-dbsavr --config config.yaml run_scheduler
+dbsavr --config config.yaml run-scheduler
 ```
 
 ### Advanced Scheduler Options
@@ -338,22 +338,22 @@ You can customize the scheduler operation with various options:
 
 - Use multiple worker processes for better performance:
   ```bash
-  dbsavr --config config.yaml run_scheduler --workers 4
+  dbsavr --config config.yaml run-scheduler --workers 4
   ```
 
 - Run the scheduler in the background (detached mode):
   ```bash
-  dbsavr --config config.yaml run_scheduler --detach --pid-file /var/run/dbsavr.pid
+  dbsavr --config config.yaml run-scheduler --detach --pid-file /var/run/dbsavr.pid
   ```
 
 - Control the logging verbosity:
   ```bash
-  dbsavr --config config.yaml run_scheduler --loglevel debug
+  dbsavr --config config.yaml run-scheduler --loglevel debug
   ```
 
 - Specify a log directory:
   ```bash
-  dbsavr --config config.yaml run_scheduler --log-dir /var/log/dbsavr
+  dbsavr --config config.yaml run-scheduler --log-dir /var/log/dbsavr
   ```
 
 ## Backup Storage and Retention
