@@ -1,0 +1,53 @@
+databases:
+  myapp_db:
+    type: postgresql
+    host: db.example.com
+    port: 5432
+    username: backup_user
+    password: secure_password
+    database: myapp_db
+    # Optional: Override default S3 bucket for this database
+    # bucket_name: myapp-specific-backups
+    options:
+      extra_args:
+        - "--exclude-table=temp_logs"
+  
+  analytics_db:
+    type: mysql
+    host: analytics.example.com
+    port: 3306
+    username: backup_user
+    password: secure_password
+    database: analytics_db
+    # Optional: Override default S3 bucket for this database
+    # bucket_name: analytics-specific-backups
+
+s3:
+  bucket_name: my-database-backups
+  prefix: backups
+  region: us-west-2
+  # Use IAM role or environment credentials
+  # access_key: AWS_ACCESS_KEY
+  # secret_key: AWS_SECRET_KEY
+
+schedules:
+  - database_name: myapp_db
+    cron_expression: "0 2 * * *"  # Daily at 2 AM
+    retention_days: 30
+    # Optional: Override default prefix for this schedule
+    # prefix: daily-backups
+  
+  - database_name: myapp_db
+    cron_expression: "0 0 * * 0"  # Weekly on Sunday at midnight
+    retention_days: 90
+    # Optional: Different prefix for weekly backups of the same database
+    # prefix: weekly-backups
+  
+  - database_name: analytics_db
+    cron_expression: "0 3 * * 0"  # Weekly on Sunday at 3 AM
+    retention_days: 90
+    # Optional: Override default prefix for this schedule
+    # prefix: weekly-backups
+
+log_level: INFO
+notifications_email: alerts@example.com
