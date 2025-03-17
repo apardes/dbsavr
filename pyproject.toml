@@ -11,7 +11,7 @@ license = {file = "LICENSE"}
 dynamic = ["version"]
 keywords = ["database", "backup", "postgresql", "mysql", "mongodb", "s3"]
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Aaron Pardes", email = "aaron@pardes.io"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
