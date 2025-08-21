@@ -23,12 +23,13 @@ class BackupService:
         """
         self.config = config
     
-    def perform_backup(self, db_name: str) -> Dict[str, Any]:
+    def perform_backup(self, db_name: str, schedule_index: Optional[int] = None) -> Dict[str, Any]:
         """
         Execute a complete backup workflow for a database
         
         Args:
             db_name: Name of the database to back up
+            schedule_index: Optional index of the specific schedule to use (for databases with multiple schedules)
             
         Returns:
             Dict with backup results (status, s3_key, duration, deleted_backups)
@@ -38,7 +39,7 @@ class BackupService:
             Exception: If backup process fails
         """
         start_time = datetime.now()
-        logger.info(f"Starting backup for database: {db_name}")
+        logger.info(f"Starting backup for database: {db_name} (schedule_index: {schedule_index})")
         
         try:
             # Get database configuration
@@ -48,9 +49,12 @@ class BackupService:
             db_config = self.config.databases[db_name]
             
             # Get schedule information for this database
-            schedule_info = self._get_schedule_info(db_name)
+            # If schedule_index is provided, use that specific schedule
+            schedule_info = self._get_schedule_info(db_name, schedule_index)
             retention_days = schedule_info.get('retention_days', 30)
             schedule_prefix = schedule_info.get('prefix')
+            
+            logger.info(f"Using schedule with prefix: {schedule_prefix}, retention: {retention_days} days")
             
             # Create the backup
             backup_path, filename = BackupEngine.backup_database(db_config)
@@ -107,7 +111,9 @@ class BackupService:
                 'duration': duration,
                 'deleted_backups': len(deleted),
                 'deleted_keys': deleted,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'schedule_prefix': schedule_prefix,
+                'retention_days': retention_days
             }
         
         except Exception as e:
@@ -139,7 +145,9 @@ class BackupService:
             raise ValueError(f"Database configuration not found for: {db_name}")
         
         db_config = self.config.databases[db_name]
-        schedule_info = self._get_schedule_info(db_name)
+        
+        # Get all schedules for this database
+        all_schedules = self._get_all_schedules_for_database(db_name)
         
         return {
             'name': db_name,
@@ -148,7 +156,7 @@ class BackupService:
             'port': db_config.port,
             'database': db_config.database,
             'custom_bucket': db_config.bucket_name,
-            'schedule': schedule_info
+            'schedules': all_schedules  # Return all schedules, not just the first one
         }
     
     def list_available_databases(self) -> List[str]:
@@ -160,13 +168,14 @@ class BackupService:
         """
         return list(self.config.databases.keys())
     
-    def cleanup_old_backups(self, db_name: str, days: Optional[int] = None) -> List[str]:
+    def cleanup_old_backups(self, db_name: str, days: Optional[int] = None, schedule_prefix: Optional[str] = None) -> List[str]:
         """
         Clean up old backups for a specific database
         
         Args:
             db_name: Name of the database
             days: Optional override for retention days
+            schedule_prefix: Optional specific schedule prefix to clean up
             
         Returns:
             List of deleted S3 keys
@@ -180,10 +189,14 @@ class BackupService:
         
         db_config = self.config.databases[db_name]
         
-        # Get schedule information
-        schedule_info = self._get_schedule_info(db_name)
+        # If schedule_prefix is specified, find that specific schedule
+        if schedule_prefix:
+            schedule_info = self._get_schedule_by_prefix(db_name, schedule_prefix)
+        else:
+            schedule_info = self._get_schedule_info(db_name)
+        
         retention_days = days if days is not None else schedule_info.get('retention_days', 30)
-        schedule_prefix = schedule_info.get('prefix')
+        prefix = schedule_prefix or schedule_info.get('prefix')
         
         # Get custom bucket if configured
         custom_bucket = db_config.bucket_name
@@ -197,30 +210,114 @@ class BackupService:
             db_name,
             retention_days,
             custom_bucket=custom_bucket,
-            custom_prefix=schedule_prefix
+            custom_prefix=prefix
         )
     
-    def _get_schedule_info(self, db_name: str) -> Dict[str, Any]:
+    def _get_all_schedules_for_database(self, db_name: str) -> List[Dict[str, Any]]:
         """
-        Get schedule information for a database
+        Get all schedule information for a database
         
         Args:
             db_name: Name of the database
             
         Returns:
+            List of dicts with schedule information
+        """
+        schedules = []
+        for idx, schedule in enumerate(self.config.schedules):
+            if schedule.database_name == db_name:
+                schedules.append({
+                    'index': idx,
+                    'retention_days': schedule.retention_days,
+                    'prefix': schedule.prefix,
+                    'cron_expression': schedule.cron_expression
+                })
+        
+        if not schedules:
+            logger.warning(f"No schedules found for {db_name}, using default")
+            return [{
+                'index': None,
+                'retention_days': 30,
+                'prefix': None,
+                'cron_expression': None
+            }]
+        
+        return schedules
+    
+    def _get_schedule_by_prefix(self, db_name: str, prefix: str) -> Dict[str, Any]:
+        """
+        Get schedule information for a database by prefix
+        
+        Args:
+            db_name: Name of the database
+            prefix: Schedule prefix to look for
+            
+        Returns:
             Dict with schedule information
         """
+        for idx, schedule in enumerate(self.config.schedules):
+            if schedule.database_name == db_name and schedule.prefix == prefix:
+                return {
+                    'index': idx,
+                    'retention_days': schedule.retention_days,
+                    'prefix': schedule.prefix,
+                    'cron_expression': schedule.cron_expression
+                }
+        
+        logger.warning(f"No schedule found for {db_name} with prefix {prefix}, using default")
+        return {
+            'index': None,
+            'retention_days': 30,
+            'prefix': None,
+            'cron_expression': None
+        }
+    
+    def _get_schedule_info(self, db_name: str, schedule_index: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Get schedule information for a database
+        
+        Args:
+            db_name: Name of the database
+            schedule_index: Optional specific schedule index to use
+            
+        Returns:
+            Dict with schedule information
+        """
+        if schedule_index is not None:
+            # Use specific schedule by index
+            if 0 <= schedule_index < len(self.config.schedules):
+                schedule = self.config.schedules[schedule_index]
+                if schedule.database_name == db_name:
+                    return {
+                        'index': schedule_index,
+                        'retention_days': schedule.retention_days,
+                        'prefix': schedule.prefix,
+                        'cron_expression': schedule.cron_expression
+                    }
+                else:
+                    logger.warning(f"Schedule at index {schedule_index} is not for database {db_name}")
+        
+        # Fall back to first matching schedule (original behavior for compatibility)
         schedule = next((s for s in self.config.schedules if s.database_name == db_name), None)
         
         if not schedule:
             logger.warning(f"No schedule found for {db_name}, using default retention of 30 days")
             return {
+                'index': None,
                 'retention_days': 30,
                 'prefix': None,
                 'cron_expression': None
             }
         
+        # Find the index of this schedule
+        schedule_idx = None
+        for idx, s in enumerate(self.config.schedules):
+            if s == schedule:
+                schedule_idx = idx
+                break
+        
         return {
+            'index': schedule_idx,
             'retention_days': schedule.retention_days,
             'prefix': schedule.prefix,
             'cron_expression': schedule.cron_expression
@@ -247,7 +344,7 @@ class BackupService:
         Returns:
             List of deleted S3 keys
         """
-        logger.info(f"Cleaning up old backups for {db_name} (retention: {retention_days} days)")
+        logger.info(f"Cleaning up old backups for {db_name} (retention: {retention_days} days, prefix: {custom_prefix})")
         
         deleted = s3_storage.cleanup_old_backups(
             db_name,

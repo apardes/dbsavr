@@ -38,7 +38,7 @@ def get_backup_service():
     return _backup_service
 
 @app.task(bind=True, name='backup_database')
-def backup_database(self, db_name: str):
+def backup_database(self, db_name: str, schedule_index: int = None):
     """
     Celery task to backup a database and upload to S3
     
@@ -46,18 +46,19 @@ def backup_database(self, db_name: str):
     
     Args:
         db_name: Name of the database to backup
+        schedule_index: Optional index of the specific schedule to use
         
     Returns:
         Dict with status and details of the backup operation
     """
     logger = logging.getLogger(__name__)
-    logger.info(f"Celery task started for database backup: {db_name}")
+    logger.info(f"Celery task started for database backup: {db_name} (schedule_index: {schedule_index})")
     
     try:
-        # Use BackupService to perform the backup
+        # Use BackupService to perform the backup with the specific schedule
         backup_service = get_backup_service()
-        result = backup_service.perform_backup(db_name)
-        logger.info(f"Backup task completed successfully for {db_name}")
+        result = backup_service.perform_backup(db_name, schedule_index=schedule_index)
+        logger.info(f"Backup task completed successfully for {db_name} with prefix: {result.get('schedule_prefix')}")
         return result
     except Exception as e:
         logger.error(f"Backup task failed for {db_name}: {str(e)}", exc_info=True)

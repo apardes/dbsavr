@@ -182,7 +182,7 @@ beat_scheduler = 'celery.beat.PersistentScheduler'
 beat_schedule = {{
 """
         
-        # Add schedule entries
+        # Add schedule entries with schedule index
         for idx, schedule in enumerate(self.config.schedules):
             db_name = schedule.database_name
             cron_parts = schedule.cron_expression.split()
@@ -202,7 +202,7 @@ beat_schedule = {{
             month_of_year='{month_of_year}',
             day_of_week='{day_of_week}'
         ),
-        'args': ['{db_name}']
+        'args': ['{db_name}', {idx}]
     }},
 """
         

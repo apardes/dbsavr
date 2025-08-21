@@ -64,23 +64,44 @@ def backup(config, database_name, timeout):
         click.echo(f"Error: Database '{database_name}' not found in configuration.", err=True)
         click.echo(f"Available databases: {', '.join(backup_service.list_available_databases())}")
         sys.exit(1)
-        
-    click.echo(f"Starting backup for {database_name}...")
     
-    try:
-        # Use BackupService directly - no Celery dependency
-        result = backup_service.perform_backup(database_name)
+    # Get all schedules for this database
+    schedules = [s for i, s in enumerate(config.schedules) if s.database_name == database_name]
+    
+    if not schedules:
+        # No schedules defined, just run a default backup
+        click.echo(f"Starting backup for {database_name}...")
+        try:
+            result = backup_service.perform_backup(database_name)
+            click.echo(f"Backup completed: {result['status']}")
+            click.echo(f"S3 Key: {result['s3_key']}")
+            click.echo(f"Backup Size: {result['size_mb']:.2f} MB")
+            click.echo(f"Duration: {result['duration']:.2f} seconds")
+            click.echo(f"Deleted old backups: {result['deleted_backups']}")
+        except Exception as e:
+            click.echo(f"Backup failed: {str(e)}", err=True)
+            sys.exit(1)
+    else:
+        # Run all schedules
+        click.echo(f"Starting backup for {database_name} ({len(schedules)} schedules)...")
         
-        # Format output
-        click.echo(f"Backup completed: {result['status']}")
-        click.echo(f"S3 Key: {result['s3_key']}")
-        click.echo(f"Backup Size: {result['size_mb']:.2f} MB")
-        click.echo(f"Duration: {result['duration']:.2f} seconds")
-        click.echo(f"Deleted old backups: {result['deleted_backups']}")
-        
-    except Exception as e:
-        click.echo(f"Backup failed: {str(e)}", err=True)
-        sys.exit(1)
+        for idx, schedule in enumerate(config.schedules):
+            if schedule.database_name != database_name:
+                continue
+                
+            prefix = schedule.prefix or 'default'
+            click.echo(f"\nRunning {prefix} backup...")
+            
+            try:
+                result = backup_service.perform_backup(database_name, schedule_index=idx)
+                click.echo(f"✓ Backup completed: {result['status']}")
+                click.echo(f"  S3 Key: {result['s3_key']}")
+                click.echo(f"  Size: {result['size_mb']:.2f} MB")
+                click.echo(f"  Duration: {result['duration']:.2f} seconds")
+                click.echo(f"  Deleted old backups: {result['deleted_backups']}")
+            except Exception as e:
+                click.echo(f"✗ Backup failed for {prefix}: {str(e)}", err=True)
+                # Continue with other schedules even if one fails
 
 @cli.command()
 @click.pass_obj
